@@ -93,6 +93,41 @@ def LoadData():
 
     return df_prices, df_pro
 
+def LoadData_AllYears_MWh():
+    
+    ### Load electricity prices ###
+    price_path = os.path.join(os.getcwd(),'ElspotpricesEA.csv')
+    df_prices = pd.read_csv(price_path)
+    
+    ### Convert to datetime ###
+    df_prices["HourDK"] = pd.to_datetime(df_prices["HourDK"])
+    df_prices["HourUTC"] = pd.to_datetime(df_prices["HourUTC"])
+    df_prices['HourUTC'] = df_prices['HourUTC'].dt.tz_localize('UTC')
+    df_prices['HourDK'] = df_prices['HourUTC'].dt.tz_convert('CET')
+    
+    ### Convert prices to DKK/kWh ###
+    df_prices['SpotPriceDKK'] = df_prices['SpotPriceDKK']
+    
+    ### Filter only DK2 prices ###
+    df_prices = df_prices.loc[df_prices['PriceArea']=="DK2"]
+    
+    ### Keep the time and price columns ###
+    df_prices = df_prices[['HourDK','SpotPriceDKK',"HourUTC"]]
+    
+    ### Reset the index ###
+    df_prices = df_prices.reset_index(drop=True)
+
+    ### Keep only 2022 and 2023 ###
+    df_prices = df_prices.loc[df_prices["HourDK"].dt.year.isin([2019, 2020, 2021, 2022,2023])]
+    
+    ### Reset the index ###
+    df_prices = df_prices.reset_index(drop=True)
+    
+    ### Rename SpotPriceDKK to Sell ###
+    df_prices.rename(columns={'SpotPriceDKK': 'Sell'}, inplace=True)
+
+    return df_prices
+
 def Optimizer(params, ps, pb, net_load):
 
     """ 
