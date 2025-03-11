@@ -93,8 +93,7 @@ def LoadData():
 
     return df_prices, df_pro
 
-
-def Optimizer(params, p):
+def Optimizer(params, ps, pb, net_load):
 
     """ 
     Calculate the dimension of your decision variables (n)
@@ -102,21 +101,32 @@ def Optimizer(params, p):
     # A day may have 23 or 25 hours or you may want to solve your problem over 48 hours!
     """
     
-    n = len(p)
+    n = len(ps)
     
     ### Define the decision variables ###
     p_c = cp.Variable(n)
     p_d = cp.Variable(n)
     X   = cp.Variable(n)
+
+    ### Define the profit variable ###
+    f_plus = cp.Variable(n, nonneg=True)
+    f_minus = cp.Variable(n, nonneg=True)
     
-    ### Define the cost function ###
-    profit = cp.sum(p_d@p - p_c@p)
+    ### Define the flow variable ###
+    flow = net_load + p_c - p_d
+
+    ### Define the profit function ###
+    profit = cp.sum( f_minus @ ps - f_plus @ pb )
     
     ### Add constraints ###
     constraints = [p_c >= 0, 
                    p_d >= 0, 
                    p_c <= params['Pmax'], 
                    p_d <= params['Pmax']]
+    ### Add the flow constraints ###
+    constraints += [f_plus - f_minus == flow,
+                    f_plus >= 0,
+                    f_minus >= 0]
     constraints += [X >= 0, X <= params['Cmax']]
     constraints += [X[0]==params['C_0'] + p_c[0]*params['n_c'] - p_d[0]/params['n_d']]
     constraints += [X[1:] == X[:-1] + p_c[1:]*params['n_c'] - p_d[1:]/params['n_d']]
