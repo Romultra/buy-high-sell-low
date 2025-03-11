@@ -127,7 +127,7 @@ def Optimizer(params, ps, pb, net_load):
     constraints += [f_plus - f_minus == flow,
                     f_plus >= 0,
                     f_minus >= 0]
-    constraints += [X >= 0, X <= params['Cmax']]
+    constraints += [X >= params['Cmin'], X <= params['Cmax']]
     constraints += [X[0]==params['C_0'] + p_c[0]*params['n_c'] - p_d[0]/params['n_d']]
     constraints += [X[1:] == X[:-1] + p_c[1:]*params['n_c'] - p_d[1:]/params['n_d']]
     constraints += [X[n-1]>=params['C_n']]
