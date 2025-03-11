@@ -189,7 +189,7 @@ def Optimizer_NonProsumer(params, price):
     X   = cp.Variable(n)
 
     ### Define the profit function ###
-    profit = cp.sum(p_c @ price - p_d @ price)
+    profit = cp.sum(-p_c @ price + p_d @ price)
     
     ### Add constraints ###
     constraints = [p_c >= 0, 
