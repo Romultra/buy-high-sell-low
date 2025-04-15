@@ -135,6 +135,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+EnergyAnalyticsF25
 
 # Spyder project settings
 .spyderproject
