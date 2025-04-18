@@ -45,11 +45,10 @@ def PricesDK(df_prices):
     
     return df_prices
 
-
 def LoadData():
     
     ### Load electricity prices ###
-    price_path = os.path.join(os.getcwd(),'ElspotpricesEA.csv')
+    price_path = os.path.join(os.getcwd(), 'ElspotpricesEA.csv')
     df_prices = pd.read_csv(price_path)
     
     ### Convert to datetime ###
@@ -129,11 +128,20 @@ def LoadData_AllYears_MWh():
     return df_prices
 
 def Optimizer(params, ps, pb, net_load):
-
     """ 
-    Calculate the dimension of your decision variables (n)
-    # Do not hard-code values (i.e. n = 24!)
-    # A day may have 23 or 25 hours or you may want to solve your problem over 48 hours!
+    Optimizer function for the prosumer model under net metering.
+
+    Parameters:
+    params: dictionary with the parameters of the battery.
+    ps: vector of selling prices.
+    pb: vector of buying prices.
+    net_load: vector of net load values.
+
+    Returns:
+    profit: profit value of the optimization problem.
+    p_c: vector of charging power values.
+    p_d: vector of discharging power values.
+    X: vector of battery state of charge values.
     """
     
     n = len(ps)
@@ -174,11 +182,19 @@ def Optimizer(params, ps, pb, net_load):
     return profit.value, p_c.value, p_d.value, X.value
 
 def Optimizer_NonProsumer(params, price):
-
     """ 
-    Calculate the dimension of your decision variables (n)
-    # Do not hard-code values (i.e. n = 24!)
-    # A day may have 23 or 25 hours or you may want to solve your problem over 48 hours!
+    Optimizer function for the non-prosumer model.
+    With a single price for buying and selling.
+
+    Parameters:
+    params: dictionary with the parameters of the battery.
+    price: vector of prices.
+
+    Returns:
+    profit: profit value of the optimization problem.
+    p_c: vector of charging power values.
+    p_d: vector of discharging power values.
+    X: vector of battery state of charge values.
     """
 
     n = len(price)
