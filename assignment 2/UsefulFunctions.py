@@ -51,7 +51,14 @@ def create_sequences(data, window_size, n_lookahead):
     X, y = [], []
     for i in range(len(data) - window_size - n_lookahead + 1):
         X.append(data[i:i+window_size])  # Input sequence of length <window_size>
-        y.append(data[i+window_size:i+window_size+n_lookahead])  # Output: next <n_lookahead> hours
+        y.append(data[i+window_size:i+window_size+n_lookahead])  # Output: next <n_lookahead> prices
+    return np.array(X), np.array(y)
+
+def create_sequences_multivariate(data, window_size, n_lookahead):
+    X, y = [], []
+    for i in range(len(data) - window_size - n_lookahead +1):
+        X.append(data[i:i+window_size])              # Input: <window_size> x <n_features>, ie 24x4
+        y.append(data[i+window_size:i+window_size+n_lookahead, 0])  # Output: next <n_lookahead> prices
     return np.array(X), np.array(y)
 
 # Rolling forecast
@@ -68,6 +75,23 @@ def rolling_forecast(model, history_scaled, test_scaled, window_size, n_lookahea
         input_seq = data[n_train+day*n_lookahead-window_size:n_train+day*n_lookahead].reshape((1, window_size, 1))
         pred_scaled = model.predict(input_seq, verbose=0)[0]
 
+        predictions.append(pred_scaled)
+
+    return np.array(predictions)
+
+def rolling_forecast_multivariate(model, history_scaled, test_scaled, n_steps, n_lookahead, n_features): 
+    predictions = []
+    data = np.concatenate((history_scaled, test_scaled), axis=0)  # Concatenate history and test data
+    
+    # Number of predictions
+    n_train = len(history_scaled)  # Training set size
+    n_test = len(test_scaled) # Test set size
+    N = int(n_test/n_lookahead)
+
+    for day in range(N):
+        input_seq = data[n_train+day*n_lookahead-n_steps:n_train+day*n_lookahead].reshape((1, n_steps, n_features))
+        pred_scaled = model.predict(input_seq, verbose=0)[0]
+                
         predictions.append(pred_scaled)
 
     return np.array(predictions)
@@ -99,7 +123,7 @@ def LSTM_multilayer(n_steps, n_features, n_neurons,
     
     return model
 
-def FitLSTM(train_scaled, n_steps, n_features, n_lookahead, n_neurons, 
+def FitLSTM_multilayer(train_scaled, n_steps, n_features, n_lookahead, n_neurons, 
             n_neurons_dense, epochs, dropout1, dropout2):
          
     # Split the training data into input-output pairs using a sliding window approach
@@ -171,6 +195,53 @@ def FitLSTM_1layer(train_scaled, n_steps, n_features, n_lookahead, n_neurons,
     # Display the model architecture summary
     model.summary()
     
+    # Plot the training and validation loss over epochs
+    plt.figure(figsize=(10, 6))
+    plt.plot(history.history['loss'], label='Training Loss')  # Training loss over epochs
+    plt.plot(history.history['val_loss'], label='Validation Loss')  # Validation loss over epochs
+    plt.title('Model Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend(loc='upper right')  # Display the legend at the upper right
+    plt.grid(True)  # Add a grid for easier visualization of the loss values
+    plt.show()
+
+    # Return the trained model and the scaled dataset
+    return model
+
+def FitLSTM_ext(train_scaled, n_steps, n_features, n_lookahead, n_neurons, 
+                epochs, dropout, ordered_validation=True):
+
+    # Split the training data into input-output pairs using a sliding window approach
+    # X will contain the sequences and y will contain the corresponding targets
+    X, y = create_sequences_multivariate(train_scaled, n_steps, n_lookahead)
+
+    # Create a 1 layer LSTM model with the specified parameters
+    # The model will be built using n_steps, n_features, and other hyperparameters
+    model = LSTM_1layer(n_steps, n_features, n_neurons, n_lookahead, dropout)
+
+    # Fit the model on the training data using a validation split of 20%
+    # The model will train on 80% of the training data and validate on 20% for each epoch
+    if ordered_validation:
+        # Split the data into training and validation sets in order
+        split_index = int(len(X) * 0.8)
+        X_train, X_val = X[:split_index], X[split_index:]
+        y_train, y_val = y[:split_index], y[split_index:]   
+
+        history = model.fit(
+        X_train, y_train, 
+        validation_data=(X_val, y_val), 
+        epochs=epochs, verbose=1)
+    else:
+        # Randomly split the data into training and validation sets
+        history = model.fit(
+        X, y, epochs=epochs, 
+        validation_split=0.2,  # 20% of training data used for validation
+        verbose=1)  # Display progress during training
+
+    # Display the model architecture summary
+    model.summary()
+
     # Plot the training and validation loss over epochs
     plt.figure(figsize=(10, 6))
     plt.plot(history.history['loss'], label='Training Loss')  # Training loss over epochs
