@@ -1,7 +1,9 @@
+import numpy as np
 import cvxpy as cp
-from keras.models import Sequential # type: ignore
-from keras.layers import LSTM, Dense, Dropout, Input # type: ignore
-from keras.optimizers import Adam # type: ignore
+import matplotlib.pyplot as plt
+from keras._tf_keras.keras.models import Sequential
+from keras._tf_keras.keras.layers import LSTM, Dense, Dropout, Input
+from keras._tf_keras.keras.optimizers import Adam
 
 def Optimizer_NonProsumer(params, price):
     """ 
@@ -45,26 +47,43 @@ def Optimizer_NonProsumer(params, price):
     
     return profit.value, p_c.value, p_d.value, X.value
 
+def create_sequences(data, window_size, n_lookahead):
+    X, y = [], []
+    for i in range(len(data) - window_size - n_lookahead + 1):
+        X.append(data[i:i+window_size])  # Input sequence of length <window_size>
+        y.append(data[i+window_size:i+window_size+n_lookahead])  # Output: next <n_lookahead> hours
+    return np.array(X), np.array(y)
 
-def LSTM_1layer(n_steps, n_features, X_train, y_train, n_neurons, n_lookahead, dropout):
+# Rolling forecast
+def rolling_forecast(model, history_scaled, test_scaled, window_size, n_lookahead):
+    predictions = []
+    data = np.concatenate((history_scaled, test_scaled), axis=0)  # Concatenate history and test data
+
+    # Number of predictions
+    n_train = len(history_scaled)  # Training set size
+    n_test = len(test_scaled) # Test set size
+    N = int(n_test/n_lookahead)
     
-    # define model
-    # n_steps=24
-    # n_features=1
-    # n_neurons=50
-    # dropout=0.05
+    for day in range(N):
+        input_seq = data[n_train+day*n_lookahead-window_size:n_train+day*n_lookahead].reshape((1, window_size, 1))
+        pred_scaled = model.predict(input_seq, verbose=0)[0]
 
+        predictions.append(pred_scaled)
+
+    return np.array(predictions)
+
+def LSTM_1layer(n_steps, n_features, n_neurons, n_lookahead, dropout):
+    
+    # Define model
     model = Sequential()
     model.add(Input(shape=(n_steps, n_features)))
-    model.add(LSTM(n_neurons, activation='relu', dropout=dropout))
+    model.add(LSTM(n_neurons, dropout=dropout))
     model.add(Dense(n_lookahead))
-    # Compile model with gradient clipping
-    optimizer = Adam(learning_rate=0.0005, clipnorm=1.0)
-    model.compile(optimizer=optimizer, loss='mse')
+    model.compile(loss='mse', optimizer='adam')
 
     return model
 
-def LSTM_multilayer(n_steps, n_features, X_train, y_train, n_neurons, 
+def LSTM_multilayer(n_steps, n_features, n_neurons, 
                     n_neurons_dense, n_lookahead, dropout1, dropout2):
     
     # Define model
@@ -78,4 +97,90 @@ def LSTM_multilayer(n_steps, n_features, X_train, y_train, n_neurons,
     model.add(Dense(n_lookahead))
     model.compile(optimizer='adam', loss='mse')
     
+    return model
+
+def FitLSTM(train_scaled, n_steps, n_features, n_lookahead, n_neurons, 
+            n_neurons_dense, epochs, dropout1, dropout2):
+         
+    # Split the training data into input-output pairs using a sliding window approach
+    # X will contain the sequences and y will contain the corresponding targets
+    X, y = create_sequences(train_scaled, n_steps, n_lookahead)
+    X = X.reshape((X.shape[0], X.shape[1], 1))  # Reshape X to be 3D for LSTM input
+
+    # Create a multilayer LSTM model with the specified parameters
+    # The model will be built using n_steps, n_features, and other hyperparameters
+    model = LSTM_multilayer(n_steps, n_features, n_neurons, 
+                        n_neurons_dense, n_lookahead, dropout1, dropout2)
+
+    # Fit the model on the training data using a validation split of 20%
+    # The model will train on 80% of the training data and validate on 20% for each epoch
+    history = model.fit(
+    X, y, 
+    epochs=epochs, 
+    validation_split=0.2,  # 20% of training data used for validation
+    verbose=1)  # Display progress during training
+
+    # Display the model architecture summary
+    model.summary()
+
+    # Plot the training and validation loss over epochs
+    plt.figure(figsize=(10, 6))
+    plt.plot(history.history['loss'], label='Training Loss')  # Training loss over epochs
+    plt.plot(history.history['val_loss'], label='Validation Loss')  # Validation loss over epochs
+    plt.title('Model Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend(loc='upper right')  # Display the legend at the upper right
+    plt.grid(True)  # Add a grid for easier visualization of the loss values
+    plt.show()
+
+    # Return the trained model and the scaled dataset
+    return model
+
+def FitLSTM_1layer(train_scaled, n_steps, n_features, n_lookahead, n_neurons, 
+                   epochs, dropout, ordered_validation=True):
+         
+    # Split the training data into input-output pairs using a sliding window approach
+    # X will contain the sequences and y will contain the corresponding targets
+    X, y = create_sequences(train_scaled, n_steps, n_lookahead)
+    X = X.reshape((X.shape[0], X.shape[1], 1))  # Reshape X to be 3D for LSTM input
+
+    # Create a 1 layer LSTM model with the specified parameters
+    # The model will be built using n_steps, n_features, and other hyperparameters
+    model = LSTM_1layer(n_steps, n_features, n_neurons, n_lookahead, dropout)
+
+    # Fit the model on the training data using a validation split of 20%
+    # The model will train on 80% of the training data and validate on 20% for each epoch
+    if ordered_validation:
+        # Split the data into training and validation sets in order
+        split_index = int(len(X) * 0.8)
+        X_train, X_val = X[:split_index], X[split_index:]
+        y_train, y_val = y[:split_index], y[split_index:]   
+
+        history = model.fit(
+        X_train, y_train, 
+        validation_data=(X_val, y_val), 
+        epochs=epochs, verbose=1)
+    else:
+        # Randomly split the data into training and validation sets
+        history = model.fit(
+        X, y, epochs=epochs, 
+        validation_split=0.2,  # 20% of training data used for validation
+        verbose=1)  # Display progress during training
+
+    # Display the model architecture summary
+    model.summary()
+    
+    # Plot the training and validation loss over epochs
+    plt.figure(figsize=(10, 6))
+    plt.plot(history.history['loss'], label='Training Loss')  # Training loss over epochs
+    plt.plot(history.history['val_loss'], label='Validation Loss')  # Validation loss over epochs
+    plt.title('Model Loss')
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.legend(loc='upper right')  # Display the legend at the upper right
+    plt.grid(True)  # Add a grid for easier visualization of the loss values
+    plt.show()
+
+    # Return the trained model and the scaled dataset
     return model
