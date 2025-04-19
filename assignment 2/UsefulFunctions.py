@@ -3,7 +3,6 @@ import cvxpy as cp
 import matplotlib.pyplot as plt
 from keras._tf_keras.keras.models import Sequential
 from keras._tf_keras.keras.layers import LSTM, Dense, Dropout, Input
-from keras._tf_keras.keras.optimizers import Adam
 
 def Optimizer_NonProsumer(params, price):
     """ 
