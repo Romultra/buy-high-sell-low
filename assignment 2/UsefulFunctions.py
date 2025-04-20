@@ -219,13 +219,14 @@ def FitLSTM_ext(train_scaled, n_steps, n_features, n_lookahead, n_neurons,
     # The model will be built using n_steps, n_features, and other hyperparameters
     model = LSTM_1layer(n_steps, n_features, n_neurons, n_lookahead, dropout)
 
-    # Fit the model on the training data using a validation split of 20%
-    # The model will train on 80% of the training data and validate on 20% for each epoch
+    # Fit the model on the training data using a validation split of 10%
+    # The model will train on 80% of the training data and validate on 10% for each epoch
     if ordered_validation:
         # Split the data into training and validation sets in order
-        split_index = int(len(X) * 0.8)
-        X_train, X_val = X[:split_index], X[split_index:]
-        y_train, y_val = y[:split_index], y[split_index:]   
+        split_index_start = int(len(X) * 0.4)
+        split_index_end = int(len(X) * 0.5)
+        X_train, X_val = np.concatenate((X[:split_index_start], X[split_index_end:])), X[split_index_start:split_index_end]
+        y_train, y_val = np.concatenate((y[:split_index_start], y[split_index_end:])), y[split_index_start:split_index_end]
 
         history = model.fit(
         X_train, y_train, 
@@ -235,7 +236,7 @@ def FitLSTM_ext(train_scaled, n_steps, n_features, n_lookahead, n_neurons,
         # Randomly split the data into training and validation sets
         history = model.fit(
         X, y, epochs=epochs, 
-        validation_split=0.2,  # 20% of training data used for validation
+        validation_split=0.1,  # 10% of training data used for validation
         verbose=1)  # Display progress during training
 
     # Display the model architecture summary
