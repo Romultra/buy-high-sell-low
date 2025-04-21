@@ -38,13 +38,74 @@ def Optimizer_NonProsumer(params, price):
     constraints += [X >= params['Cmin'], X <= params['Cmax']]
     constraints += [X[0]==params['C_0'] + p_c[0]*params['n_c'] - p_d[0]/params['n_d']]
     constraints += [X[1:] == X[:-1] + p_c[1:]*params['n_c'] - p_d[1:]/params['n_d']]
-    constraints += [X[n-1]>=params['C_n']]
+    constraints += [X[n-1]==params['C_n']]
     
     ### Solve the problem ###
     problem = cp.Problem(cp.Maximize(profit), constraints)
     problem.solve(solver=cp.CLARABEL)
     
     return profit.value, p_c.value, p_d.value, X.value
+
+def profits_from_SOC_strategy(prices, SOC_strategy, negative=True):
+    """
+    Calculate profits based on the given SOC strategy using the price data from parts of the training set.
+    This function takes in the price data, processes it by day, and calculates the profits
+    for the battery operation using the Optimizer_NonProsumer function.
+    The profit can be returned as a negative value to be minimized.
+
+    Parameters:
+    prices (ndarray): The price data for the battery operation.
+    SOC_strategy (float): The state of charge strategy for the battery, [0.1, 2].
+    negative (bool): If True, the profit will be returned as a negative value.
+
+    Returns:
+    float: The total profit calculated for the given SOC strategy.
+    """
+    # Battery parameters
+    battery_params = {
+        'Pmax': 1,      # Power capacity in MW
+        'Cmax': 2,     # Energy capacity in MWh
+        'Cmin': 0.2,      # Minimum SOC (10%)
+        'C_0': SOC_strategy,       # Initial SOC
+        'C_n': SOC_strategy,       # Final SOC
+        'n_c': 0.95,    # Charging efficiency
+        'n_d': 0.95     # Discharging efficiency
+    }
+
+    # Initialize result
+    profits = 0
+
+    # Reshape the prices array to simulate daily data
+    daily_prices = prices.reshape(-1, 24)  # 30 days, 24 hours each 
+
+    # Process data by days
+    for i, day_prices in enumerate(daily_prices):
+        # Start with 50% SOC for the first day, requirement from the assignment
+        if i == 0:
+            battery_params['C_0'] = 1
+        else:
+            battery_params['C_0'] = SOC_strategy
+
+        # Optimize battery operation with price arbitrage
+        # The goal is to charge when prices are low and discharge when prices are high
+        profit_value, p_c_value, p_d_value, X_value = Optimizer_NonProsumer(battery_params, day_prices)
+
+        # Calculate the battery net discharge.
+        # Positive means discharging/selling, negative means charging/buying
+        net_discharge = p_d_value - p_c_value
+
+        # Calculate cost with battery
+        day_profit = 0
+        for j in range(len(net_discharge)):
+            day_profit += net_discharge[j] * day_prices[j]
+
+        profits += day_profit
+
+    # If negative is True, return the negative profit for minimization
+    if negative:
+        return -profits
+    else:
+        return profits
 
 def create_sequences(data, window_size, n_lookahead):
     X, y = [], []
